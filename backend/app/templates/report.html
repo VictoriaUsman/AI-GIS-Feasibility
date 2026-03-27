@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1a1a1a; font-size: 11pt; }
+
+    .page { padding: 2.5cm 2.5cm; }
+
+    /* Header */
+    .header { border-bottom: 3px solid #0369a1; padding-bottom: 16px; margin-bottom: 24px; }
+    .header h1 { font-size: 22pt; color: #0369a1; font-weight: 700; }
+    .header .subtitle { font-size: 11pt; color: #64748b; margin-top: 4px; }
+    .header .meta { font-size: 9pt; color: #94a3b8; margin-top: 8px; }
+
+    /* Score badge */
+    .score-section { display: flex; align-items: center; gap: 24px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px 24px; margin-bottom: 24px; }
+    .score-badge { text-align: center; }
+    .score-badge .number { font-size: 48pt; font-weight: 800; line-height: 1; color: {{ score_color }}; }
+    .score-badge .label { font-size: 9pt; color: #64748b; margin-top: 4px; }
+    .score-desc h2 { font-size: 14pt; color: #1e293b; margin-bottom: 6px; }
+    .score-desc p { font-size: 10pt; color: #475569; line-height: 1.6; }
+
+    /* Sections */
+    h2.section-title { font-size: 13pt; color: #0369a1; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 14px; margin-top: 24px; }
+
+    /* Narrative */
+    .narrative { font-size: 10.5pt; line-height: 1.75; color: #334155; }
+    .narrative p { margin-bottom: 12px; }
+
+    /* Layers table */
+    .layers-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .layers-table th { background: #0369a1; color: white; padding: 8px 12px; text-align: left; font-size: 9.5pt; }
+    .layers-table td { padding: 8px 12px; font-size: 9.5pt; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+    .layers-table tr:nth-child(even) td { background: #f8fafc; }
+    .score-pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-weight: 700; color: white; font-size: 9pt; }
+
+    /* Progress bar */
+    .bar-bg { background: #e2e8f0; border-radius: 4px; height: 6px; margin-top: 4px; }
+    .bar-fill { height: 6px; border-radius: 4px; }
+
+    /* Risk flags */
+    .risk-flag { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 8px 12px; margin-bottom: 8px; font-size: 9.5pt; color: #92400e; border-radius: 0 4px 4px 0; }
+    .no-flags { background: #f0fdf4; border-left: 4px solid #16a34a; padding: 8px 12px; font-size: 9.5pt; color: #15803d; border-radius: 0 4px 4px 0; }
+
+    /* Footer */
+    .footer { margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 8pt; color: #94a3b8; text-align: center; }
+
+    @page { margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- Header -->
+    <div class="header">
+      <h1>SiteSight PH</h1>
+      <div class="subtitle">AI + GIS Site Feasibility Report</div>
+      <div class="meta">
+        Generated: {{ generated_at }} &nbsp;|&nbsp;
+        Coordinates: {{ result.coordinates.lat | round(6) }}°N, {{ result.coordinates.lng | round(6) }}°E
+      </div>
+    </div>
+
+    <!-- Overall score -->
+    <div class="score-section">
+      <div class="score-badge">
+        <div class="number" style="color: {{ score_color }}">{{ result.overall_score }}</div>
+        <div class="label">/ 100</div>
+      </div>
+      <div class="score-desc">
+        <h2>Overall Feasibility Score</h2>
+        <p>
+          {% if result.overall_score >= 70 %}
+            This site scores <strong>favorably</strong> across key GIS feasibility indicators.
+          {% elif result.overall_score >= 40 %}
+            This site shows <strong>moderate feasibility</strong> with some risk factors to consider.
+          {% else %}
+            This site has <strong>significant risk factors</strong> that may affect development viability.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <!-- AI Narrative -->
+    <h2 class="section-title">Executive Summary</h2>
+    <div class="narrative">
+      {% for para in result.ai_narrative.split('\n\n') %}
+        {% if para.strip() %}
+          <p>{{ para.strip() }}</p>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <!-- GIS Layers -->
+    <h2 class="section-title">GIS Layer Analysis</h2>
+    <table class="layers-table">
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th style="width: 80px; text-align: center;">Score</th>
+          <th>Summary</th>
+          <th style="width: 100px;">Raw Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for layer in layers %}
+        <tr>
+          <td><strong>{{ layer.name }}</strong></td>
+          <td style="text-align: center;">
+            <span class="score-pill" style="background: {{ layer.color }}">{{ layer.score }}</span>
+          </td>
+          <td>{{ layer.summary }}</td>
+          <td style="color: #64748b;">{{ layer.raw_value or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Risk Flags -->
+    <h2 class="section-title">Risk Flags</h2>
+    {% if result.risk_flags %}
+      {% for flag in result.risk_flags %}
+        <div class="risk-flag">&#9888; {{ flag }}</div>
+      {% endfor %}
+    {% else %}
+      <div class="no-flags">&#10003; No critical risk flags detected for this location.</div>
+    {% endif %}
+
+    <!-- Footer -->
+    <div class="footer">
+      This report is generated using AI and publicly available GIS data. It is intended as a
+      preliminary screening tool and does not replace professional engineering, environmental,
+      or legal due diligence. SiteSight PH &copy; {{ generated_at.split(',')[0].split(' ')[-1] }}
+    </div>
+
+  </div>
+</body>
+</html>

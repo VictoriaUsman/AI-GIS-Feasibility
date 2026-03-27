@@ -1,0 +1,32 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+.next/
+out/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Data files (large GIS files)
+data/osm/*.pbf
+data/**/*.shp
+data/**/*.dbf
+data/**/*.shx
+data/**/*.prj
+data/**/*.cpg
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
