@@ -3,9 +3,10 @@ PDF report generation using WeasyPrint + Jinja2 templates.
 """
 
 import os
+import io
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
-from weasyprint import HTML
+from xhtml2pdf import pisa
 from app.models.analysis import AnalysisResult
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
@@ -25,7 +26,9 @@ def generate_pdf(result: AnalysisResult) -> bytes:
         ],
     )
 
-    return HTML(string=html_content).write_pdf()
+    buffer = io.BytesIO()
+    pisa.CreatePDF(html_content, dest=buffer)
+    return buffer.getvalue()
 
 
 def _score_color(score: int) -> str:

@@ -17,11 +17,13 @@ Data sources (to be loaded into PostGIS):
   - poi                      (OpenStreetMap)
 """
 
-import math
+import logging
 from typing import Any
 from sqlalchemy import text
 from app.db import get_db_session
 from app.models.analysis import AnalysisLayer
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +76,8 @@ async def _score_flood(session, geom_wkt: str) -> AnalysisLayer:
             summary=f"Flood susceptibility rated as {level}.",
             raw_value=level,
         )
-    except Exception:
+    except Exception as e:
+        logger.error("Flood query failed: %s", e)
         return AnalysisLayer(name="Flood Susceptibility", score=70, summary="Flood layer not yet loaded.", raw_value="Pending data")
 
 
@@ -104,7 +107,8 @@ async def _score_landslide(session, geom_wkt: str) -> AnalysisLayer:
             summary=f"Landslide susceptibility rated as {level}.",
             raw_value=level,
         )
-    except Exception:
+    except Exception as e:
+        logger.error("Landslide query failed: %s", e)
         return AnalysisLayer(name="Landslide Susceptibility", score=70, summary="Landslide layer not yet loaded.", raw_value="Pending data")
 
 
@@ -144,23 +148,26 @@ async def _score_fault_proximity(session, geom_wkt: str, lng: float, lat: float)
             summary = f"{dist_km:.1f}km from nearest active fault. Low seismic risk."
 
         return AnalysisLayer(name="Fault Line Proximity", score=score, summary=summary, raw_value=f"{dist_km:.1f} km")
-    except Exception:
+    except Exception as e:
+        logger.error("Fault line query failed: %s", e)
         return AnalysisLayer(name="Fault Line Proximity", score=70, summary="Fault line layer not yet loaded.", raw_value="Pending data")
 
 
 async def _score_road_access(session, geom_wkt: str, lng: float, lat: float) -> AnalysisLayer:
-    """Score road accessibility based on distance to nearest road."""
+    """Score road accessibility based on distance to nearest road.
+    osm2pgsql stores 'way' in EPSG:3857 — transform query point accordingly.
+    """
     try:
         result = await session.execute(
             text("""
                 SELECT
                     ST_Distance(
-                        way::geography,
-                        ST_Point(:lng, :lat)::geography
+                        ST_Transform(way, 4326)::geography,
+                        ST_Point(:lng, :lat, 4326)::geography
                     ) AS distance_m
                 FROM planet_osm_line
                 WHERE highway IS NOT NULL
-                ORDER BY way <-> ST_Transform(ST_Point(:lng, :lat), 3857)
+                ORDER BY way <-> ST_Transform(ST_SetSRID(ST_Point(:lng, :lat), 4326), 3857)
                 LIMIT 1
             """),
             {"lng": lng, "lat": lat},
@@ -187,7 +194,8 @@ async def _score_road_access(session, geom_wkt: str, lng: float, lat: float) -> 
             summary = f"Poor road access, nearest road is {dist_m/1000:.1f}km away."
 
         return AnalysisLayer(name="Road Access", score=score, summary=summary, raw_value=f"{dist_m:.0f} m")
-    except Exception:
+    except Exception as e:
+        logger.error("Road access query failed: %s", e)
         return AnalysisLayer(name="Road Access", score=60, summary="Road layer not yet loaded.", raw_value="Pending data")
 
 
@@ -228,12 +236,15 @@ async def _score_demographics(session, geom_wkt: str) -> AnalysisLayer:
             summary = f"Very low-density area ({pop:,} residents). {location}."
 
         return AnalysisLayer(name="Population / Demographics", score=score, summary=summary, raw_value=f"{pop:,} residents")
-    except Exception:
+    except Exception as e:
+        logger.error("Demographics query failed: %s", e)
         return AnalysisLayer(name="Population / Demographics", score=60, summary="Demographic layer not yet loaded.", raw_value="Pending data")
 
 
 async def _score_poi_density(session, geom_wkt: str, lng: float, lat: float) -> AnalysisLayer:
-    """Score points of interest density within 1km radius."""
+    """Score points of interest density within 1km radius.
+    osm2pgsql stores 'way' in EPSG:3857 — use ST_DWithin with transformed point.
+    """
     try:
         result = await session.execute(
             text("""
@@ -241,8 +252,8 @@ async def _score_poi_density(session, geom_wkt: str, lng: float, lat: float) -> 
                 FROM planet_osm_point
                 WHERE amenity IS NOT NULL
                 AND ST_DWithin(
-                    way::geography,
-                    ST_Point(:lng, :lat)::geography,
+                    way,
+                    ST_Transform(ST_SetSRID(ST_Point(:lng, :lat), 4326), 3857),
                     1000
                 )
             """),
@@ -268,7 +279,8 @@ async def _score_poi_density(session, geom_wkt: str, lng: float, lat: float) -> 
             summary = f"Minimal commercial activity ({count} amenities within 1km)."
 
         return AnalysisLayer(name="POI Density", score=score, summary=summary, raw_value=f"{count} POIs")
-    except Exception:
+    except Exception as e:
+        logger.error("POI density query failed: %s", e)
         return AnalysisLayer(name="POI Density", score=50, summary="POI data not yet loaded.", raw_value="Pending data")
 
 
